@@ -6,6 +6,7 @@ This plugin allows you to define per-page multi-step validation flows, where nam
 
 Use:
 
+```
 ~~REVIEWFLOW|
 version=2.1
 author=@alice
@@ -13,6 +14,7 @@ reviewer=@bob
 validator=@carol
 render=table
 ~~
+```
 
 - Each role must be confirmed by the matching user.
 - Roles can have any label.
