@@ -10,20 +10,18 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
 
     public function handle_confirm(Doku_Event $event) {
         global $ID;
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
-        if (!isset($_POST['reviewflow_stage'])) return;
-        $stage = $_POST['reviewflow_stage'];
-        global $USERINFO;
-        $user = $_SERVER['REMOTE_USER'] ?? $USERINFO['name'] ?? null;
-        if (!$user) {
-            msg("Unable to determine current user for validation.", -1);
+
+        // we check if the page contains a reviewflow block
+        $raw = io_readFile(wikiFN($ID));
+        if (!preg_match('/~~REVIEWFLOW\|(.*?)~~/s', $raw, $match)) {
+            // if not we just bail out
             return;
         }
-        if (!checkSecurityToken()) return;
+        $reviewflow_block = $match[1];
 
-        $raw = io_readFile(wikiFN($ID));
-        preg_match('/~~REVIEWFLOW\|(.*?)~~/s', $raw, $match);
-        $reviewflow_block = $match[1] ?? '';
+        // Load existing metadata
+        $meta = p_get_metadata($ID, 'plugin reviewflow') ?? [];
+
 
         $parsedFlow = [];
         $version = '';
@@ -36,6 +34,40 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
             }
         }
 
+        $previous_involved_users = $meta['currently_involved_users'] ?? [];
+        $meta['currently_involved_users'] = array_values(array_map(
+            fn($v) => ltrim($v, '@'),
+            array_filter($parsedFlow, fn($k) => !in_array($k, ['version', 'render']), ARRAY_FILTER_USE_KEY)
+        ));
+
+        // check if this is a validation submission or just a normal page save
+        if ( ($_SERVER['REQUEST_METHOD'] !== 'POST') || (!isset($_POST['reviewflow_stage'])) ) {
+            // just a normal page save we update involved users if needed and bails out
+            if ($meta['currently_involved_users'] !== $previous_involved_users) {
+                // update involved users list
+                p_set_metadata($ID, ['plugin' => ['reviewflow' => [
+                    '_validation_history' => $meta['_validation_history'],
+                    '_validation_chain' => $meta['_validation_chain'],
+                    '_version_history' => $meta['_version_history'],
+                    'validated_rev' => $meta['validated_rev'],
+                    'currently_involved_users' => $meta['currently_involved_users']
+                ]]]);
+            }
+            return;
+        }
+
+
+        $stage = $_POST['reviewflow_stage'];
+        global $USERINFO;
+        $user = $_SERVER['REMOTE_USER'] ?? $USERINFO['name'] ?? null;
+        if (!$user) {
+            msg("Unable to determine current user for validation.", -1);
+            return;
+        }
+        if (!checkSecurityToken()) return;
+
+
+
         if (empty($parsedFlow) || isset($parsedFlow['']) || $version === '') {
             msg(implode("<BR/>\n", [
                 "ReviewFlow: unable to parse the current review flow – validation aborted.",
@@ -46,8 +78,7 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
             return;
         }
 
-        // Load existing metadata
-        $meta = p_get_metadata($ID, 'plugin reviewflow') ?? [];
+
 
         // Record validation history
         $external_ts = null;
@@ -105,10 +136,6 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
         }
         $new_hash = compute_entry_hash($new_validation, $prev_hash);
         $meta['_validation_chain'][] = $new_hash;
-        $meta['currently_involved_users'] = array_values(array_map(
-            fn($v) => ltrim($v, '@'),
-            array_filter($parsedFlow, fn($k) => !in_array($k, ['version', 'render']), ARRAY_FILTER_USE_KEY)
-        ));
         
 
         // Check if all validations are now complete for this revision
@@ -140,29 +167,22 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
                 'expected' => $parsedFlow
             ];
             $meta['validated_rev'] = $rev;
-            p_set_metadata($ID, ['plugin' => ['reviewflow' => [
-                '_validation_history' => $meta['_validation_history'],
-                '_validation_chain' => $meta['_validation_chain'],
-                '_version_history' => $meta['_version_history'],
-                'validated_rev' => $meta['validated_rev'],
-                'currently_involved_users' => $meta['currently_involved_users']
-            ]]]);
         } else {
-            // Update metadata without validating new version
-            p_set_metadata($ID, ['plugin' => ['reviewflow' => [
-                '_validation_history' => $meta['_validation_history'],
-                '_validation_chain' => $meta['_validation_chain'],
-                'currently_involved_users' => $meta['currently_involved_users']
-            ]]]);
+            //msg("DEBUG: Validation considered inconsistent", -1);
+            //msg("→ Parsed flow: " . htmlspecialchars(json_encode($parsedFlow)), -1);
+            //msg("→ Confirmed roles/users: " . htmlspecialchars(json_encode($validated)), -1);
+            //msg("→ Validation history: " . htmlspecialchars(json_encode($meta['_validation_history'] ?? [])), -1);
+            //msg("→ Validation chain: " . htmlspecialchars(json_encode($meta['_validation_chain'] ?? [])), -1);
         }
 
-        if (!$allConfirmed) {
-            msg("DEBUG: Validation considered inconsistent", -1);
-            msg("→ Parsed flow: " . htmlspecialchars(json_encode($parsedFlow)), -1);
-            msg("→ Confirmed roles/users: " . htmlspecialchars(json_encode($validated)), -1);
-            msg("→ Validation history: " . htmlspecialchars(json_encode($meta['_validation_history'] ?? [])), -1);
-            msg("→ Validation chain: " . htmlspecialchars(json_encode($meta['_validation_chain'] ?? [])), -1);
-        }
+        p_set_metadata($ID, ['plugin' => ['reviewflow' => [
+            '_validation_history' => $meta['_validation_history'],
+            '_validation_chain' => $meta['_validation_chain'],
+            '_version_history' => $meta['_version_history'],
+            'validated_rev' => $meta['validated_rev'],
+            'currently_involved_users' => $meta['currently_involved_users']
+        ]]]);
+
 
         // Purge page cache to reflect updated validation
         $cache = new \dokuwiki\Cache\CacheRenderer($ID, wikiFN($ID), 'xhtml');

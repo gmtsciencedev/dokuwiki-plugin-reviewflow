@@ -95,9 +95,25 @@ class syntax_plugin_reviewflow extends DokuWiki_Syntax_Plugin {
         // Check _version_history consistency (cross-check with _validation_history)
         if (isset($meta['_version_history']) && isset($meta['_validation_history'])) {
             $valids = [];
+            // build a map of revision per version from version history
+            $version_rev = [];
+            foreach ($meta['_version_history'] as $vh) {
+                if (isset($vh['version'], $vh['rev'])) {
+                    $version_rev[$vh['version']] = $vh['rev'];
+                }
+            }
+            // now add version and current rev ($viewed_rev) if version is not in the $version_rev map
+            if ($version !== null && !isset($version_rev[$version])) {
+                $version_rev[$version] = $viewed_rev;
+            }
+            
+
             foreach ($meta['_validation_history'] as $v) {
                 if (!isset($v['timestamp'], $v['role'], $v['user'], $v['version'])) continue;
                 $ver = $v['version'];
+                if (!isset($version_rev[$ver]) || $version_rev[$ver] !== $v['rev']) {
+                    continue; // skip entries with a rev unknown in version history or with a rev mismatch
+                }
                 if (!isset($valids[$ver])) {
                     $valids[$ver] = [
                         'roles' => [$v['role'] => $v['user']],
@@ -147,7 +163,7 @@ class syntax_plugin_reviewflow extends DokuWiki_Syntax_Plugin {
                             $previous_validated_rev_link = wl($ID, 'rev=' . $previous_validated_rev);
                             $previous_validated_version = $entry['version'];
                             $current_version_is_unset = true;
-                            msg("DEBUG: Current page revision " . $viewed_rev . " does not match validated revision " . $entry['rev'], 0);
+                            //msg("DEBUG: Current page revision " . $viewed_rev . " does not match validated revision " . $entry['rev'], 0);
                         }
                         
                     } else {
@@ -180,6 +196,17 @@ class syntax_plugin_reviewflow extends DokuWiki_Syntax_Plugin {
         $renderer->info['cachedepends']['files'][] = metaFN($ID, '.meta');
         $renderer->info['cachedepends']['user'] = $INFO['client'];
 
+        // Prepare display names
+        require_once(DOKU_INC . 'inc/auth.php');
+        $fmt_user = function($u){
+            // userlink returns HTML, so strip tags and escape
+            $link = userlink($u);
+            if($link){
+                return hsc(strip_tags($link));
+            }
+            return hsc($u);
+        };
+
         // Banner
         $color = $current_version_is_valid ? 'green' : 'red';
         $banner = '<div class="reviewflow-box reviewflow-banner-' . $color . '">';
@@ -209,17 +236,6 @@ class syntax_plugin_reviewflow extends DokuWiki_Syntax_Plugin {
 
         // Use auth_quickaclcheck to check user permission
         $perm = auth_quickaclcheck($ID);
-
-        // Prepare display names
-        require_once(DOKU_INC . 'inc/auth.php');
-        $fmt_user = function($u){
-            // userlink returns HTML, so strip tags and escape
-            $link = userlink($u);
-            if($link){
-                return hsc(strip_tags($link));
-            }
-            return hsc($u);
-        };
 
         if ($render_mode === 'table') {
             $renderer->doc .= '<table class="reviewflow-table reviewflow-confirm-table">';
