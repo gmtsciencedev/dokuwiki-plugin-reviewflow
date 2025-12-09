@@ -1,0 +1,7 @@
+base    reviewflow
+author  Your Name
+email   your@email.com
+date    2025-12-05
+name    ReviewFlow Plugin
+desc    Enables named user confirmation workflows with status rendering and validation summary.
+url     https://github.com/yourname/dokuwiki-plugin-reviewflow
