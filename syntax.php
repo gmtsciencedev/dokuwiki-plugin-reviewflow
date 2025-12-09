@@ -180,6 +180,33 @@ class syntax_plugin_reviewflow extends DokuWiki_Syntax_Plugin {
         $renderer->info['cachedepends']['files'][] = metaFN($ID, '.meta');
         $renderer->info['cachedepends']['user'] = $INFO['client'];
 
+        // Banner
+        $color = $current_version_is_valid ? 'green' : 'red';
+        $banner = '<div class="reviewflow-box reviewflow-banner-' . $color . '">';
+        if ($current_version_is_unset) {
+            $version_msg = 'Current version is not properly set, change it in review flow. ';
+        } else {
+            $version_msg = $version ? 'Current version: ' . hsc($version) : 'Current version: —';
+        }
+        if ($previous_validated_rev_link) {
+            $text_link = $previous_validated_rev < $viewed_rev ? 'previous valid version' : 'current valid version';
+            $version_msg .= ' (<a href="' . $previous_validated_rev_link . '">' . $text_link . '</a>)';
+        } else {
+            $version_msg .= ' (no previous valid version)';
+        }
+        $banner .= $version_msg . '<br>';
+        $banner .= 'Review status: ' . ($current_version_is_valid ? 'complete.' : 'incomplete.') . '<br>';
+        if (!$current_version_is_valid) {
+            $lst = [];
+            foreach ($missing_roles as $role => $user) {
+                $lst[] = hsc($role) . ' (' . $fmt_user(ltrim($user,"@")) . ')';
+            }
+            $banner .= 'Missing review: ' . implode(', ', $lst);
+        }
+        $banner .= '</div>';
+
+        $renderer->doc = $banner . $renderer->doc;
+
         // Use auth_quickaclcheck to check user permission
         $perm = auth_quickaclcheck($ID);
 
@@ -194,37 +221,13 @@ class syntax_plugin_reviewflow extends DokuWiki_Syntax_Plugin {
             return hsc($u);
         };
 
-        // Banner
-        $color = $current_version_is_valid ? 'green' : 'red';
-        $renderer->doc .= '<div class="reviewflow-box reviewflow-banner-' . $color . '">';
-        if ($current_version_is_unset) {
-            $version_msg = 'Current version is not properly set, change it in review flow. ';
-        } else {
-            $version_msg = $version ? 'Current version: ' . hsc($version) : 'Current version: —';
-        }
-        if ($previous_validated_rev_link) {
-            $text_link = $previous_validated_rev < $viewed_rev ? 'previous valid version' : 'current valid version';
-            $version_msg .= ' (<a href="' . $previous_validated_rev_link . '">' . $text_link . '</a>)';
-        } else {
-            $version_msg .= ' (no previous valid version)';
-        }
-        $renderer->doc .= $version_msg . '<br>';
-        $renderer->doc .= 'Review status: ' . ($current_version_is_valid ? 'complete.' : 'incomplete.') . '<br>';
-        if (!$current_version_is_valid) {
-            $lst = [];
-            foreach ($missing_roles as $role => $user) {
-                $lst[] = hsc($role) . ' (' . $fmt_user(ltrim($user,"@")) . ')';
-            }
-            $renderer->doc .= 'Missing review: ' . implode(', ', $lst);
-        }
-        $renderer->doc .= '</div>';
-
         if ($render_mode === 'table') {
             $renderer->doc .= '<table class="reviewflow-table reviewflow-confirm-table">';
+            $renderer->doc .= "<tr><th>Version</th><td>" . hsc($version ?? '—') . "</td></tr>";
             foreach ($pairs as [$key, $value]) {
                 if (strtolower($key) === 'version') continue;
                 $confirmed = $confirmed_roles[$key] ?? null;
-                $label = hsc($key);
+                $label = ucwords(str_replace('_', ' ', hsc($key)));
                 $btn = '';
                 // offer confirm only if expected username matches current user exactly
                 $expectedUser = ltrim($value,'@');
@@ -245,7 +248,7 @@ class syntax_plugin_reviewflow extends DokuWiki_Syntax_Plugin {
             foreach ($pairs as [$key, $value]) {
                 if (strtolower($key) === 'version') continue;
                 $confirmed = $confirmed_roles[$key] ?? null;
-                $label = hsc($key);
+                $label = ucwords(str_replace('_', ' ', hsc($key)));
                 $who = $confirmed ? $fmt_user($confirmed) : $fmt_user(ltrim($value, '@'));
                 $renderer->doc .= "<li><strong>$label:</strong> $who</li>";
             }
