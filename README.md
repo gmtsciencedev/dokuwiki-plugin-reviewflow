@@ -26,7 +26,12 @@ render=table
 
 On a separate page:
 
+```
 ~~REVIEWFLOWPAGES~~
-~~REVIEWFLOWPAGES|regulatory:smq~~
-
+```
 Lists all pages with missing confirmations.
+
+```
+~~REVIEWFLOWPAGES|regulatory:smq~~
+```
+Same but with a filter.
