@@ -302,6 +302,9 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
         if (!$form instanceof \dokuwiki\Form\Form) return;
 
         $meta = p_get_metadata($INFO['id'], 'plugin reviewflow') ?? [];
+        if (empty($meta) || empty($meta['_version_history'])) {
+            return;
+        }
         $validated_rev = $meta['validated_rev'] ?? null;
 
         $version_map = [];
