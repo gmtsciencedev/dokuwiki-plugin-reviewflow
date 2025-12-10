@@ -183,7 +183,7 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
             'validated_rev' => $meta['validated_rev'],
             'currently_involved_users' => $meta['currently_involved_users'],
         ]]]);
-
+        
 
         // Purge page cache to reflect updated validation
         $cache = new \dokuwiki\Cache\CacheRenderer($ID, wikiFN($ID), 'xhtml');
@@ -322,18 +322,15 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
 
             if ($el instanceof \dokuwiki\Form\CheckableElement && $el->attr('name') === $checkName) {
                 $rev = (int)$el->attr('value');
+                $currentCheckbox = $el;
             }
 
             if (!isset($rev)) continue;
 
             $version = $version_map[$rev] ?? null;
-            $is_validated = $rev === $validated_rev;
 
             if ($el instanceof \dokuwiki\Form\HTMLElement && !empty(trim($el->val()))) {
                 $label = '';
-                if ($is_validated) {
-                    $label .= '<span class="reviewflow-valid-rev">✔</span>';
-                }
                 if ($version) {
                     $label .= ' <span class="reviewflow-version-label">v' . hsc($version) . '</span>';
                 }
@@ -341,6 +338,29 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
                     $val = $el->val();
                     $el->val("$val $label");
                 }
+            }
+            if (isset($currentCheckbox)) {
+                $pos = $form->getElementPosition($currentCheckbox);
+
+                // Search backwards for the immediate TagOpenElement 'div' to add a class to it
+                for ($offset = 1; $pos - $offset >= 0; $offset++) {
+                    $candidate = $form->getElementAt($pos - $offset);
+
+                    if (!$candidate instanceof \dokuwiki\Form\TagOpenElement) {
+                        continue;
+                    }
+
+                    if ($candidate->val() === 'div') {
+                        if ($version !== null) {
+                            $candidate->addClass('reviewflow-has-version');
+                        } else {
+                            $candidate->addClass('reviewflow-no-version');
+                        }
+                        break;
+                    }
+                }
+
+                unset($currentCheckbox);
             }
         }
     }
