@@ -107,7 +107,7 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
         foreach ($meta['_validation_history'] ?? [] as $entry) {
             if (!isset($entry['fp_hash'])) continue;
             if ($entry['fp_hash'] === $fp_hash && $entry['user'] !== $user) {
-                msg("This browser was already used to validate with a different user: validation aborted.", -1);
+                msg("It seems you are trying to counterfeit another user: validation aborted.", -1);
                 return;
             }
         }
