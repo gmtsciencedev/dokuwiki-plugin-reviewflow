@@ -6,6 +6,7 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
         $controller->register_hook('ACTION_ACT_PREPROCESS', 'BEFORE', $this, 'handle_confirm');
         $controller->register_hook('TPL_CONTENT_DISPLAY', 'BEFORE', $this, 'handle_tpl_override');
         $controller->register_hook('ACTION_ACT_PREPROCESS', 'BEFORE', $this, 'handle_early_redirect');
+        $controller->register_hook('FORM_REVISIONS_OUTPUT', 'BEFORE', $this, 'handle_revision_highlight');
     }
 
     public function handle_confirm(Doku_Event $event) {
@@ -180,7 +181,7 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
             '_validation_chain' => $meta['_validation_chain'],
             '_version_history' => $meta['_version_history'],
             'validated_rev' => $meta['validated_rev'],
-            'currently_involved_users' => $meta['currently_involved_users']
+            'currently_involved_users' => $meta['currently_involved_users'],
         ]]]);
 
 
@@ -293,6 +294,54 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
             $INFO['reviewflow_rendering_validated'] = $validated_rev;
         } elseif (!$validated_rev) {
             $INFO['reviewflow_rendering_validated'] = '__reviewflow_block__';
+        }
+    }
+    public function handle_revision_highlight(Doku_Event $event) {
+        global $INFO;
+        $form = $event->data;
+        if (!$form instanceof \dokuwiki\Form\Form) return;
+
+        $meta = p_get_metadata($INFO['id'], 'plugin reviewflow') ?? [];
+        $validated_rev = $meta['validated_rev'] ?? null;
+
+        $version_map = [];
+        foreach ($meta['_version_history'] ?? [] as $entry) {
+            if (!isset($entry['rev'], $entry['version'])) continue;
+            $version_map[$entry['rev']] = $entry['version'];
+        }
+
+        $elCount = $form->elementCount();
+        $checkName = 'rev2[]';
+
+        for ($i = 0; $i < $elCount; $i++) {
+            $el = $form->getElementAt($i);
+
+            if (!$el instanceof \dokuwiki\Form\CheckableElement && !$el instanceof \dokuwiki\Form\HTMLElement) {
+                continue;
+            }
+
+            if ($el instanceof \dokuwiki\Form\CheckableElement && $el->attr('name') === $checkName) {
+                $rev = (int)$el->attr('value');
+            }
+
+            if (!isset($rev)) continue;
+
+            $version = $version_map[$rev] ?? null;
+            $is_validated = $rev === $validated_rev;
+
+            if ($el instanceof \dokuwiki\Form\HTMLElement && !empty(trim($el->val()))) {
+                $label = '';
+                if ($is_validated) {
+                    $label .= '<span class="reviewflow-valid-rev">✔</span>';
+                }
+                if ($version) {
+                    $label .= ' <span class="reviewflow-version-label">v' . hsc($version) . '</span>';
+                }
+                if ($label) {
+                    $val = $el->val();
+                    $el->val("$val $label");
+                }
+            }
         }
     }
 }?>
