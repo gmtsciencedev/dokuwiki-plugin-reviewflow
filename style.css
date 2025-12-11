@@ -35,6 +35,9 @@ div.li.reviewflow-no-version {
     background-color: #ffe0e0 !important;
     padding-left: 6px;
 }
+td.reviewflow-no-version {
+    background-color: #ffe0e0 !important;
+}
 
 .reviewflow-version-label {
     display: inline-block;

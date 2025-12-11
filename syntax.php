@@ -285,7 +285,7 @@ class syntax_plugin_reviewflow extends DokuWiki_Syntax_Plugin {
 
             $meta = p_get_metadata($id, 'plugin reviewflow') ?? [];
             if (!empty($meta['missing_roles'])) {
-                $result = "<table class='reviewflow-table'><tr><th>Page</th><th>Missing</th></tr>";
+                $result = "<table class='reviewflow-table'><tr><th>Page</th><th>Missing Reviews</th></tr>";
                 $missing = [];
                 // Prepare display names
                 require_once(DOKU_INC . 'inc/auth.php');
@@ -302,7 +302,7 @@ class syntax_plugin_reviewflow extends DokuWiki_Syntax_Plugin {
                     $who = $fmt_user(ltrim($user, '@'));
                     $missing[] = hsc($who . ' (' . $label . ')');
                 }
-                $result .= "<tr><td><a href='" . wl($id) . "'>" . hsc($id) . "</a></td><td>" . implode(', ', $missing) . "</td></tr>";
+                $result .= "<tr><td class=\"reviewflow-no-version\"><a href='" . wl($id) . "'>" . hsc($id) . "</a></td><td class=\"reviewflow-no-version\">" . implode(', ', $missing) . "</td></tr>";
                 $result .= "</table>";
             }
         }
