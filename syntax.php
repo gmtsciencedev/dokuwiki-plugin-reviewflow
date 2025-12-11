@@ -93,7 +93,8 @@ class syntax_plugin_reviewflow extends DokuWiki_Syntax_Plugin {
         $current_version_is_valid = false;
         $current_version_is_unset = false;
         // Check _version_history consistency (cross-check with _validation_history)
-        if (isset($meta['_version_history']) && isset($meta['_validation_history'])) {
+        if (isset($meta['_validation_history'])) {
+            $meta['_version_history'] = $meta['_version_history'] ?? [];
             $valids = [];
             // build a map of revision per version from version history
             $version_rev = [];
