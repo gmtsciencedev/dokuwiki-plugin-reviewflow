@@ -275,7 +275,7 @@ class syntax_plugin_reviewflow extends DokuWiki_Syntax_Plugin {
     }
 
     private function renderPageList($ns) {
-        $result = "<table class='reviewflow-table'><tr><th>Page</th><th>Missing</th></tr>";
+        $result = '';
         $dir = dirname(__FILE__, 4) . '/data/pages/';
         $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir));
         foreach ($it as $file) {
@@ -284,22 +284,29 @@ class syntax_plugin_reviewflow extends DokuWiki_Syntax_Plugin {
             if ($ns && strpos($id, $ns . ':') !== 0) continue;
 
             $meta = p_get_metadata($id, 'plugin reviewflow') ?? [];
-            $missing = [];
-            foreach ($meta as $role => $data) {
-                if (!isset($data['user'])) {
-                    $expected = $data['expected'] ?? '';
-                    if ($expected) {
-                        $missing[] = "$role (@$expected)";
-                    } else {
-                        $missing[] = $role;
+            if (!empty($meta['missing_roles'])) {
+                $result = "<table class='reviewflow-table'><tr><th>Page</th><th>Missing</th></tr>";
+                $missing = [];
+                // Prepare display names
+                require_once(DOKU_INC . 'inc/auth.php');
+                $fmt_user = function($u){
+                    // userlink returns HTML, so strip tags and escape
+                    $link = userlink($u);
+                    if($link){
+                        return hsc(strip_tags($link));
                     }
+                    return hsc($u);
+                };
+                foreach ($meta['missing_roles'] as $role => $user) {
+                    $label = ucwords(str_replace('_', ' ', hsc($role)));
+                    $who = $fmt_user(ltrim($user, '@'));
+                    $missing[] = hsc($who . ' (' . $label . ')');
                 }
-            }
-            if ($missing) {
-                $result .= "<tr><td><a href='" . wl($id) . "'>" . hsc($id) . "</a></td><td>" . hsc(implode(', ', $missing)) . "</td></tr>";
+                $result .= "<tr><td><a href='" . wl($id) . "'>" . hsc($id) . "</a></td><td>" . implode(', ', $missing) . "</td></tr>";
+                $result .= "</table>";
             }
         }
-        $result .= "</table>";
+        
         return $result;
     }
 

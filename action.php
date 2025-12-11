@@ -43,17 +43,42 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
 
         // check if this is a validation submission or just a normal page save
         if ( ($_SERVER['REQUEST_METHOD'] !== 'POST') || (!isset($_POST['reviewflow_stage'])) ) {
-            // just a normal page save we update involved users if needed and bails out
-            if ($meta['currently_involved_users'] !== $previous_involved_users) {
-                // update involved users list
+            // Avoid resetting metadata on non-POST requests (like redirects)
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                return;
+            }
+            // Detect if a new revision was created by comparing stored revision number
+            $last_revision = $meta['current_revision'] ?? null;
+            $current_revision = @filemtime(wikiFN($ID));
+
+            // If no previous revision is recorded, assume it's the first save in context
+            $is_new_rev = ($last_revision !== $current_revision);
+
+            // Update metadata with the current revision for next request
+            $meta['current_revision'] = $current_revision;
+
+            $update_required = $meta['currently_involved_users'] !== $previous_involved_users || $is_new_rev;
+
+            if ($update_required) {
+                if ($is_new_rev) {
+                    $meta['missing_roles'] = array_filter(
+                        $parsedFlow,
+                        fn($k) => !in_array($k, ['version', 'render']),
+                        ARRAY_FILTER_USE_KEY
+                    );
+                }
+
                 p_set_metadata($ID, ['plugin' => ['reviewflow' => [
                     '_validation_history' => $meta['_validation_history'],
                     '_validation_chain' => $meta['_validation_chain'],
                     '_version_history' => $meta['_version_history'],
                     'validated_rev' => $meta['validated_rev'],
-                    'currently_involved_users' => $meta['currently_involved_users']
+                    'currently_involved_users' => $meta['currently_involved_users'],
+                    'missing_roles' => $meta['missing_roles'],
+                    'current_revision' => $meta['current_revision'],
                 ]]]);
             }
+
             return;
         }
 
@@ -149,12 +174,13 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
         }
 
         $allConfirmed = true;
+        $missing_roles = [];
         foreach ($parsedFlow as $role => $expectedUser) {
             if ($role === 'version') continue;
             if ($role === 'render') continue;
             if (!isset($validated[$role]) || $validated[$role] !== ltrim($expectedUser, '@')) {
                 $allConfirmed = false;
-                break;
+                $missing_roles[$role] = $expectedUser;
             }
         }
 
@@ -175,13 +201,14 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
             //msg("→ Validation history: " . htmlspecialchars(json_encode($meta['_validation_history'] ?? [])), -1);
             //msg("→ Validation chain: " . htmlspecialchars(json_encode($meta['_validation_chain'] ?? [])), -1);
         }
-
         p_set_metadata($ID, ['plugin' => ['reviewflow' => [
             '_validation_history' => $meta['_validation_history'],
             '_validation_chain' => $meta['_validation_chain'],
             '_version_history' => $meta['_version_history'],
             'validated_rev' => $meta['validated_rev'],
             'currently_involved_users' => $meta['currently_involved_users'],
+            'missing_roles' => $missing_roles,
+            'current_revision' => $rev,
         ]]]);
         
 
