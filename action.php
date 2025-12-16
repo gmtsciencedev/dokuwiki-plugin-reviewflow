@@ -15,7 +15,8 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
         // we check if the page contains a reviewflow block
         $raw = io_readFile(wikiFN($ID));
         if (!preg_match('/~~REVIEWFLOW\|(.*?)~~/s', $raw, $match)) {
-            // if not we just bail out
+            // If no REVIEWFLOW block is found, clean up transient metadata
+            $this->cleanupStaleMetadata($ID);
             return;
         }
         $reviewflow_block = $match[1];
@@ -230,6 +231,43 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
 
         return;
     }
+    
+    /**
+     * Clean up transient metadata when REVIEWFLOW block is removed from page.
+     * Preserves historical data but removes current workflow state.
+     *
+     * @param string $id The page ID
+     */
+    private function cleanupStaleMetadata($id) {
+        $meta = p_get_metadata($id, 'plugin reviewflow') ?? [];
+        
+        // Only proceed if there's actually metadata to clean up
+        if (empty($meta)) {
+            return;
+        }
+        
+        // Preserve historical data that should survive block removal
+        $preserved_data = [
+            '_validation_history' => $meta['_validation_history'] ?? [],
+            '_validation_chain' => $meta['_validation_chain'] ?? [],
+            '_version_history' => $meta['_version_history'] ?? [],
+            'validated_rev' => $meta['validated_rev'] ?? null,
+        ];
+        
+        // Remove transient data that should be cleaned up
+        $clean_meta = $preserved_data;
+        
+        // Only update metadata if we actually have preserved data
+        // If there's no historical data, we can remove the metadata entirely
+        if (!empty(array_filter($preserved_data, fn($v) => $v !== null && $v !== []))) {
+            p_set_metadata($id, ['plugin' => ['reviewflow' => $clean_meta]]);
+        } else {
+            // No historical data to preserve, remove metadata entirely
+            p_set_metadata($id, ['plugin' => ['reviewflow' => null]]);
+        }
+    }
+    
+
     /**
      * Render a yellow banner for reviewflow notices.
      *
@@ -247,6 +285,18 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
 
     public function handle_tpl_override(Doku_Event $event) {
         global $ID, $INFO;
+        
+        // Add page highlighting CSS if needed
+        if ($this->getConf('highlight_invalid_pages')) {
+            $meta = p_get_metadata($ID, 'plugin reviewflow') ?? [];
+            if (!empty($meta['missing_roles']) && empty($_REQUEST['rev']) && empty($_REQUEST['do'])) {
+                echo '<style type="text/css">'
+                   . '.dokuwiki div.page.group { background-color: #fdd !important; border: 2px solid #d88 !important; border-radius: 8px !important; padding: 1em !important; margin: 0.5em 0 !important; }'
+                   . '.dokuwiki div.page.group .reviewflow-banner-red { background-color: #faa !important; border: 2px solid #d66 !important; }'
+                   . '</style>';
+            }
+        }
+        
         if (($INFO['reviewflow_rendering_validated'] ?? null) === '__reviewflow_block__') {
             $event->preventDefault();
             $event->stopPropagation();
@@ -329,7 +379,7 @@ class action_plugin_reviewflow extends DokuWiki_Action_Plugin {
         if (!$form instanceof \dokuwiki\Form\Form) return;
 
         $meta = p_get_metadata($INFO['id'], 'plugin reviewflow') ?? [];
-        if (empty($meta) || empty($meta['_version_history'])) {
+        if (empty($meta) || empty($meta['_version_history']) || !isset($meta['missing_roles'])) {
             return;
         }
         $validated_rev = $meta['validated_rev'] ?? null;
